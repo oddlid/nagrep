@@ -7,11 +7,12 @@ import (
 	//"gopkg.in/urfave/cli.v2"
 	"github.com/urfave/cli"
 	"os"
+	"strings"
 	"time"
-	//"strings"
 )
 
 const VERSION string = "2017-01-12"
+
 var BUILD_DATE string
 
 func verifyObjTypes(names []string) []nagioscfg.CfgType {
@@ -60,35 +61,132 @@ func isPipe() bool {
 	return (fi.Mode() & os.ModeCharDevice) == 0
 }
 
+func splitKV(in, sep string) (string, string, bool) {
+	parts := strings.Split(in, sep)
+	if len(parts) < 2 {
+		return "", "", false
+	}
+	k := parts[0]
+	if !nagioscfg.IsValidProperty(k) {
+		return "", "", false
+	}
+	v := strings.Join(parts[1:], sep)
+	if v == "" {
+		return k, v, false
+	}
+	return k, v, true
+}
+
 func entryPoint(ctx *cli.Context) error {
 	types := verifyObjTypes(ctx.StringSlice("type"))
 	keys := verifyObjProps(ctx.StringSlice("key"))
 	exprs := ctx.StringSlice("expression")
+	delkey := ctx.StringSlice("del-key")
+	setkey := ctx.StringSlice("set-key")
+	delobjs := ctx.Bool("del-objs")
+	save := ctx.Bool("save")
+	sort := ctx.Bool("sort")
 	args := ctx.Args() // files
+	eq := "="
+
 	log.Debugf("Types: %#v", types)
 	log.Debugf("Keys: %#v", keys)
 	log.Debugf("Exprs: %#v", exprs)
 	log.Debugf("Args: %#v", args)
 
 	ncfg := nagioscfg.NewNagiosCfg()
+	src := "stdin"
 
 	if isPipe() {
 		log.Debug("Input from pipe")
-		ncfg.Config = nagioscfg.NewReader(os.Stdin).ReadAllMap("")
-	}
-	if len(args) > 1 {
+		err := ncfg.LoadStdin()
+		if err != nil {
+			log.Error(err)
+		}
+	} else if len(args) > 0 {
 		log.Debug("We need a MultiFileReader")
 		ncfg.LoadFiles(args...)
+		src = "files"
 	}
-	if len(types) > 0 {
+
+	tlen := len(types)
+	klen := len(keys)
+	elen := len(exprs)
+	slen := len(setkey)
+	var keys_deleted int
+	var keys_modified int
+	var removed_objs nagioscfg.CfgMap
+
+	if tlen > 0 {
 		log.Debug("We need to filter out a subset of given types")
+		ncfg.FilterType(types...) // as this is done before Search, it should speed up searching, with a smaller set to search
 	}
-	if len(keys) > 0 {
+
+	q := nagioscfg.NewCfgQuery()
+	if elen > 0 {
+		for i := range exprs {
+			if !q.AddRX(exprs[i]) {
+				log.Errorf("Invalid regular expression: %q", exprs[i])
+			}
+		}
+	}
+	if klen > 0 {
 		log.Debug("We only match against specific keys")
+		for i := range keys {
+			if !q.AddKey(keys[i]) {
+				log.Errorf("Invalid object property key: %q", keys[i])
+			}
+		}
 	}
-	log.Debug("Ready to get our working set")
+	log.Debug("Retrieving working set")
+	ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
+
 	log.Debug("Time for modifications")
-	log.Debug("Time for writing back to file(s)")
+	// if delete-key
+	if len(delkey) > 0 {
+		keys_deleted = ncfg.DelKeys(delkey) // save ret for number of deleted keys
+	}
+	// if set-key
+	if slen > 0 {
+		skeys := make([]string, 0, slen)
+		svals := make([]string, 0, slen)
+		for i := range setkey {
+			k, v, ok := splitKV(setkey[i], eq)
+			if ok {
+				skeys = append(skeys, k)
+				svals = append(svals, v)
+			}
+		}
+		keys_modified = ncfg.SetKeys(skeys, svals) // take ret for number of added/modified keys. Should be number of objects in current match set X number of key/value pairs
+	}
+	// if delete
+	if delobjs {
+		removed_objs = ncfg.DeleteMatches() // save ret for a CfgMap of what was deleted, for printing later
+		if save && !ncfg.InPipe() {
+			err := ncfg.SaveToOrigin(sort)
+			if err != nil {
+				log.Error(err)
+			}
+			removed_objs.Print(os.Stdout, sort)
+		}
+		if ncfg.InPipe() {
+			ncfg.Print(os.Stdout, sort)
+		}
+	} else {
+		ncfg.PrintMatches(os.Stdout, sort)
+	}
+
+	//log.Debug("Results:")
+	// add some check here so this is only done when not interfering with other stuff on stdout
+	//ncfg.PrintMatches(os.Stdout, true)
+
+	//log.Debug("Time for writing back to file(s)")
+
+	//log.Debugf("Content (from %s):\n%s", src, ncfg.DumpString())
+	log.Debugf("Content from: %s", src)
+	log.Debugf("Keys deleted: %d", keys_deleted)
+	log.Debugf("Keys modified: %d", keys_modified)
+	log.Debugf("Objects deleted: %d", len(removed_objs))
 
 	return nil
 }
@@ -107,6 +205,40 @@ func main() {
 	}
 
 	app.Flags = []cli.Flag{
+		cli.StringSliceFlag{
+			Name: "type, t",
+			Usage: "Search only these object types. May be repeated.\n\tAllowed values:\n\t\t" +
+				strings.Join(nagioscfg.ValidCfgNames(), "\n\t\t"),
+			//Value: toStringSlicePtr(nagioscfg.ValidCfgNames()),
+		},
+		cli.StringSliceFlag{
+			Name:  "key, k",
+			Usage: "Match only against the given keys/properties. May be repeated.",
+		},
+		cli.StringSliceFlag{
+			Name:  "expression, e",
+			Usage: "The regular expression(s) to use. May be repeated.",
+		},
+		cli.StringSliceFlag{
+			Name:  "set-key, s",
+			Usage: "Adds or overwrites the given key(s) for the matching objects.\n\t`FORMAT`: \"key_name=value\". May be repeated,",
+		},
+		cli.StringSliceFlag{
+			Name:  "del-key",
+			Usage: "Delete the given key from the matching objects. May be repeated.",
+		},
+		cli.BoolFlag{
+			Name:  "del-objs",
+			Usage: "Deletes all matching objects.\n\tIf input was read from files, the files will be overwritten (if \"--save\" is set),\n\t\tand the deleted objects printed on STDOUT.\n\tIf input was read from STDIN, the remaining objects will be printed on STDOUT",
+		},
+		cli.BoolFlag{
+			Name:  "sort",
+			Usage: "Sort output according to Nagios specs",
+		},
+		cli.BoolFlag{
+			Name:  "save",
+			Usage: "Save modified config back to given source files. Will not happen if input on STDIN.",
+		},
 		cli.StringFlag{
 			Name:  "log-level, l",
 			Value: "error",
@@ -115,19 +247,6 @@ func main() {
 		cli.BoolFlag{
 			Name:  "debug, d",
 			Usage: "Run in debug mode",
-		},
-		cli.StringSliceFlag{
-			Name: "type, t",
-			Usage: "Search only these object types. May be repeated.",
-			//Value: toStringSlicePtr(nagioscfg.ValidCfgNames()),
-		},
-		cli.StringSliceFlag{
-			Name: "key, k",
-			Usage: "Match only against the given keys/properties. May be repeated.\n\tNumber of invocations must match that of given expressions.",
-		},
-		cli.StringSliceFlag{
-			Name: "expression, e",
-			Usage: "The regular expression to use. May be repeated.\n\tNumber of invocations must match that of given keys.",
 		},
 	}
 
