@@ -85,7 +85,7 @@ func entryPoint(ctx *cli.Context) error {
 	setkey := ctx.StringSlice("set-key")
 	delobjs := ctx.Bool("del-objs")
 	save := ctx.Bool("save")
-	sort := ctx.Bool("sort")
+	sort := !ctx.Bool("no-sort")
 	args := ctx.Args() // files
 	eq := "="
 
@@ -98,13 +98,13 @@ func entryPoint(ctx *cli.Context) error {
 	src := "stdin"
 
 	if isPipe() {
-		log.Debug("Input from pipe")
+		//log.Debug("Input from pipe")
 		err := ncfg.LoadStdin()
 		if err != nil {
 			log.Error(err)
 		}
 	} else if len(args) > 0 {
-		log.Debug("We need a MultiFileReader")
+		//log.Debug("We need a MultiFileReader")
 		ncfg.LoadFiles(args...)
 		src = "files"
 	}
@@ -118,7 +118,7 @@ func entryPoint(ctx *cli.Context) error {
 	var removed_objs nagioscfg.CfgMap
 
 	if tlen > 0 {
-		log.Debug("We need to filter out a subset of given types")
+		//log.Debug("We need to filter out a subset of given types")
 		ncfg.FilterType(types...) // as this is done before Search, it should speed up searching, with a smaller set to search
 	}
 
@@ -131,17 +131,17 @@ func entryPoint(ctx *cli.Context) error {
 		}
 	}
 	if klen > 0 {
-		log.Debug("We only match against specific keys")
+		//log.Debug("We only match against specific keys")
 		for i := range keys {
 			if !q.AddKey(keys[i]) {
 				log.Errorf("Invalid object property key: %q", keys[i])
 			}
 		}
 	}
-	log.Debug("Retrieving working set")
+	//log.Debug("Retrieving working set")
 	ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
 
-	log.Debug("Time for modifications")
+	//log.Debug("Time for modifications")
 	// if delete-key
 	if len(delkey) > 0 {
 		keys_deleted = ncfg.DelKeys(delkey) // save ret for number of deleted keys
@@ -176,11 +176,6 @@ func entryPoint(ctx *cli.Context) error {
 		ncfg.PrintMatches(os.Stdout, sort)
 	}
 
-	//log.Debug("Results:")
-	// add some check here so this is only done when not interfering with other stuff on stdout
-	//ncfg.PrintMatches(os.Stdout, true)
-
-	//log.Debug("Time for writing back to file(s)")
 
 	//log.Debugf("Content (from %s):\n%s", src, ncfg.DumpString())
 	log.Debugf("Content from: %s", src)
@@ -232,8 +227,8 @@ func main() {
 			Usage: "Deletes all matching objects.\n\tIf input was read from files, the files will be overwritten (if \"--save\" is set),\n\t\tand the deleted objects printed on STDOUT.\n\tIf input was read from STDIN, the remaining objects will be printed on STDOUT",
 		},
 		cli.BoolFlag{
-			Name:  "sort",
-			Usage: "Sort output according to Nagios specs",
+			Name:  "no-sort",
+			Usage: "Do not sort output according to Nagios specs",
 		},
 		cli.BoolFlag{
 			Name:  "save",
