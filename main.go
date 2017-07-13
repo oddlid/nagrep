@@ -5,15 +5,20 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/vgtmnm/nagioscfg"
 	//"gopkg.in/urfave/cli.v2"
+	//"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"github.com/urfave/cli"
 	"os"
 	"strings"
 	"time"
 )
 
-const VERSION string = "2017-01-12"
+const VERSION string = "2017-01-16"
 
 var BUILD_DATE string
+
+//func pcreMatchString(re, s string) bool {
+//	return pcre.MustCompile(re, pcre.CASELESS).MatcherString(s, 0).Matches()
+//}
 
 func verifyObjTypes(names []string) []nagioscfg.CfgType {
 	nlen := len(names)
@@ -48,13 +53,13 @@ func verifyObjProps(keys []string) []string {
 	return validProps
 }
 
-func toStringSlicePtr(s []string) *cli.StringSlice {
-	css := make(cli.StringSlice, len(s))
-	for i := range s {
-		css[i] = s[i]
-	}
-	return &css
-}
+//func toStringSlicePtr(s []string) *cli.StringSlice {
+//	css := make(cli.StringSlice, len(s))
+//	for i := range s {
+//		css[i] = s[i]
+//	}
+//	return &css
+//}
 
 func isPipe() bool {
 	fi, _ := os.Stdin.Stat()
@@ -126,7 +131,7 @@ func entryPoint(ctx *cli.Context) error {
 	if elen > 0 {
 		for i := range exprs {
 			if !q.AddRX(exprs[i]) {
-				log.Errorf("Invalid regular expression: %q", exprs[i])
+				log.Fatalf("Invalid regular expression: %q", exprs[i])
 			}
 		}
 	}
@@ -140,6 +145,8 @@ func entryPoint(ctx *cli.Context) error {
 	}
 	//log.Debug("Retrieving working set")
 	ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
+
+	// this seems like a good place for inverting matches if requested...
 
 	//log.Debug("Time for modifications")
 	// if delete-key
@@ -176,9 +183,10 @@ func entryPoint(ctx *cli.Context) error {
 		ncfg.PrintMatches(os.Stdout, sort)
 	}
 
-
 	//log.Debugf("Content (from %s):\n%s", src, ncfg.DumpString())
 	log.Debugf("Content from: %s", src)
+	log.Debugf("Objects in DB: %d", ncfg.Len())
+	log.Debugf("Matching objects: %d", ncfg.GetMatches().Len())
 	log.Debugf("Keys deleted: %d", keys_deleted)
 	log.Debugf("Keys modified: %d", keys_modified)
 	log.Debugf("Objects deleted: %d", len(removed_objs))
@@ -214,9 +222,17 @@ func main() {
 			Name:  "expression, e",
 			Usage: "The regular expression(s) to use. May be repeated.",
 		},
+		cli.BoolFlag{
+			Name:  "not",
+			Usage: "Negate/inverse search to only list objects NOT matching given expressions.\n\tThe evaluation is done after all other keys/expressions are matched.",
+		},
+		cli.StringSliceFlag{
+			Name:  "append-key, a",
+			Usage: "Appends the given value to the given key's existing value. `FORMAT`: \"key_name=value\". May be repeated.",
+		},
 		cli.StringSliceFlag{
 			Name:  "set-key, s",
-			Usage: "Adds or overwrites the given key(s) for the matching objects.\n\t`FORMAT`: \"key_name=value\". May be repeated,",
+			Usage: "Adds or overwrites the given key(s) for the matching objects.\n\t`FORMAT`: \"key_name=value\". May be repeated.",
 		},
 		cli.StringSliceFlag{
 			Name:  "del-key",
@@ -224,24 +240,32 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "del-objs",
-			Usage: "Deletes all matching objects.\n\tIf input was read from files, the files will be overwritten (if \"--save\" is set),\n\t\tand the deleted objects printed on STDOUT.\n\tIf input was read from STDIN, the remaining objects will be printed on STDOUT",
+			Usage: "Deletes all matching objects.\n\tIf input was read from files, the files will be overwritten (if \"--save\" is set),\n\t\tand the deleted objects printed on STDOUT.\n\tIf input was read from STDIN, the remaining objects will be printed on STDOUT.",
 		},
 		cli.BoolFlag{
 			Name:  "no-sort",
-			Usage: "Do not sort output according to Nagios specs",
+			Usage: "Do not sort output according to Nagios specs.",
 		},
 		cli.BoolFlag{
 			Name:  "save",
 			Usage: "Save modified config back to given source files. Will not happen if input on STDIN.",
 		},
+		cli.BoolFlag{
+			Name:  "quiet",
+			Usage: "Don't output anything.",
+		},
+		cli.BoolFlag{
+			Name:  "verbose",
+			Usage: "Print extra info.",
+		},
 		cli.StringFlag{
 			Name:  "log-level, l",
 			Value: "error",
-			Usage: "Log level (options: debug, info, warn, error, fatal, panic)",
+			Usage: "Log level (options: debug, info, warn, error, fatal, panic).",
 		},
 		cli.BoolFlag{
 			Name:  "debug, d",
-			Usage: "Run in debug mode",
+			Usage: "Run in debug mode.",
 		},
 	}
 
