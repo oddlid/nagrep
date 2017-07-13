@@ -82,6 +82,17 @@ func splitKV(in, sep string) (string, string, bool) {
 	return k, v, true
 }
 
+// Same functionality as "nafmt", because I have time now...
+func formatPipe(sort bool) error {
+	ncfg := nagioscfg.NewNagiosCfg()
+	err := ncfg.LoadStdin()
+	if err != nil {
+		return cli.NewExitError("Unable to load STDIN", 74) // EX_IOERR=74 # input/output error (from sysexits.h)
+	}
+	ncfg.Print(os.Stdout, sort)
+	return nil
+}
+
 func entryPoint(ctx *cli.Context) error {
 	types := verifyObjTypes(ctx.StringSlice("type"))
 	keys := verifyObjProps(ctx.StringSlice("key"))
@@ -91,6 +102,7 @@ func entryPoint(ctx *cli.Context) error {
 	delobjs := ctx.Bool("del-objs")
 	save := ctx.Bool("save")
 	sort := !ctx.Bool("no-sort")
+	format := ctx.Bool("format-only")
 	args := ctx.Args() // files
 	eq := "="
 
@@ -98,6 +110,11 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Keys: %#v", keys)
 	log.Debugf("Exprs: %#v", exprs)
 	log.Debugf("Args: %#v", args)
+
+	// take the easy way out
+	if format {
+		return formatPipe(sort)
+	}
 
 	ncfg := nagioscfg.NewNagiosCfg()
 	src := "stdin"
@@ -221,6 +238,10 @@ func main() {
 		cli.StringSliceFlag{
 			Name:  "expression, e",
 			Usage: "The regular expression(s) to use. May be repeated.",
+		},
+		cli.BoolFlag{
+			Name:  "format-only",
+			Usage: "Only read input from stdin, and output formatted to stdout. No matching.",
 		},
 		cli.BoolFlag{
 			Name:  "not",
