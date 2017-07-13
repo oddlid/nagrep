@@ -1,11 +1,8 @@
 package main
 
 import (
-	//"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/vgtmnm/nagioscfg"
-	//"gopkg.in/urfave/cli.v2"
-	//"github.com/glenn-brown/golang-pkg-pcre/src/pkg/pcre"
 	"github.com/urfave/cli"
 	"os"
 	"strings"
@@ -16,10 +13,6 @@ const VERSION string = "2017-07-13"
 
 var BUILD_DATE string
 
-//func pcreMatchString(re, s string) bool {
-//	return pcre.MustCompile(re, pcre.CASELESS).MatcherString(s, 0).Matches()
-//}
-
 func verifyObjTypes(names []string) []nagioscfg.CfgType {
 	nlen := len(names)
 	if nlen == 0 {
@@ -27,11 +20,8 @@ func verifyObjTypes(names []string) []nagioscfg.CfgType {
 	}
 	validTypes := make([]nagioscfg.CfgType, 0, nlen)
 	for _, n := range names {
-		//log.Debugf("Name string: %s", n)
 		name := nagioscfg.CfgName(n)
-		//log.Debugf("Name: %s", name)
 		typ := name.Type()
-		//log.Debugf("Type: %s", typ)
 		if typ != nagioscfg.T_INVALID {
 			validTypes = append(validTypes, typ)
 		}
@@ -82,7 +72,7 @@ func splitKV(in, sep string) (string, string, bool) {
 	return k, v, true
 }
 
-// Same functionality as "nafmt", because I have time now...
+// Same functionality as "nafmt", because I have time right now...
 func formatPipe(sort bool) error {
 	ncfg := nagioscfg.NewNagiosCfg()
 	err := ncfg.LoadStdin()
@@ -120,13 +110,11 @@ func entryPoint(ctx *cli.Context) error {
 	src := "stdin"
 
 	if isPipe() {
-		//log.Debug("Input from pipe")
 		err := ncfg.LoadStdin()
 		if err != nil {
 			log.Error(err)
 		}
 	} else if len(args) > 0 {
-		//log.Debug("We need a MultiFileReader")
 		ncfg.LoadFiles(args...)
 		src = "files"
 	}
@@ -140,7 +128,6 @@ func entryPoint(ctx *cli.Context) error {
 	var removed_objs nagioscfg.CfgMap
 
 	if tlen > 0 {
-		//log.Debug("We need to filter out a subset of given types")
 		ncfg.FilterType(types...) // as this is done before Search, it should speed up searching, with a smaller set to search
 	}
 
@@ -153,19 +140,16 @@ func entryPoint(ctx *cli.Context) error {
 		}
 	}
 	if klen > 0 {
-		//log.Debug("We only match against specific keys")
 		for i := range keys {
 			if !q.AddKey(keys[i]) {
 				log.Errorf("Invalid object property key: %q", keys[i])
 			}
 		}
 	}
-	//log.Debug("Retrieving working set")
 	ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
 
 	// this seems like a good place for inverting matches if requested...
 
-	//log.Debug("Time for modifications")
 	// if delete-key
 	if len(delkey) > 0 {
 		keys_deleted = ncfg.DelKeys(delkey) // save ret for number of deleted keys
@@ -306,22 +290,7 @@ func main() {
 
 		return nil
 	}
-	//app.Action = func(ctx *cli.Context) error {
-	//	log.Debug("Running and exiting...")
-	//	fmt.Fprintf(ctx.App.Writer, "Expr: %#v\n", ctx.StringSlice("expression"))
-	//	types := ctx.StringSlice("types")
-	//	nctypes := verifyObjTypes(types)
-	//	fmt.Fprintf(ctx.App.Writer, "Types: %#v\n", nctypes)
-	//	return nil
-	//}
+
 	app.Action = entryPoint
-
-	//app.After = func(ctx *cli.Context) error {
-	//	fmt.Fprintf(ctx.App.Writer, "Compiled: %s\n", ctx.App.Compiled)
-	//	//fmt.Fprintf(ctx.App.Writer, "Build date: %s\n", BUILD_DATE)
-	//	return nil
-	//}
 	app.Run(os.Args)
-
-	//fmt.Printf("nagrep using %s v%s\n", nagioscfg.PKGNAME, nagioscfg.VERSION)
 }
