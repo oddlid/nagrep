@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const VERSION string = "2017-01-16"
+const VERSION string = "2017-07-13"
 
 var BUILD_DATE string
 
@@ -240,7 +240,7 @@ func main() {
 			Usage: "The regular expression(s) to use. May be repeated.",
 		},
 		cli.BoolFlag{
-			Name:  "format-only",
+			Name:  "format-only, f",
 			Usage: "Only read input from stdin, and output formatted to stdout. No matching.",
 		},
 		cli.BoolFlag{
