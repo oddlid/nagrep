@@ -169,21 +169,35 @@ func entryPoint(ctx *cli.Context) error {
 		}
 		keys_modified = ncfg.SetKeys(skeys, svals) // take ret for number of added/modified keys. Should be number of objects in current match set X number of key/value pairs
 	}
-	// if delete
+
 	if delobjs {
-		removed_objs = ncfg.DeleteMatches() // save ret for a CfgMap of what was deleted, for printing later
-		if save && !ncfg.InPipe() {
-			err := ncfg.SaveToOrigin(sort)
-			if err != nil {
-				log.Error(err)
-			}
-			removed_objs.Print(os.Stdout, sort)
+		removed_objs = ncfg.DeleteMatches()
+	}
+
+	if save && !isPipe() {
+		err := ncfg.SaveToOrigin(sort)
+		if err != nil {
+			log.Error(err)
 		}
-		if ncfg.InPipe() {
+	}
+
+	if isPipe() {
+		// Input came from STDIN. If something was modified, we print everything back. If not, we print matches.
+		if removed_objs != nil || keys_deleted > 0 || keys_modified > 0 {
 			ncfg.Print(os.Stdout, sort)
+		} else {
+			ncfg.PrintMatches(os.Stdout, sort)
 		}
-	} else { // need more cases than this
-		ncfg.PrintMatches(os.Stdout, sort)
+	} else {
+		if removed_objs != nil {
+			// Input came from files, and might have been saved back above.
+			// We only print what's removed, so it can be piped into a new file if desired.
+			removed_objs.Print(os.Stdout, sort)
+		} else {
+			// Input came from files, and might have been saved back above.
+			// No objects are deleted, so we print the matching, and possibly modified, contents back.
+			ncfg.PrintMatches(os.Stdout, sort)
+		}
 	}
 
 	//log.Debugf("Content (from %s):\n%s", src, ncfg.DumpString())
