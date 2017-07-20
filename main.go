@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const VERSION string = "2017-07-13"
+const VERSION string = "2017-07-21"
 
 var BUILD_DATE string
 
