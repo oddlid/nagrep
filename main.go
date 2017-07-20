@@ -2,8 +2,9 @@ package main
 
 import (
 	log "github.com/Sirupsen/logrus"
-	"github.com/vgtmnm/nagioscfg"
+	"github.com/oddlid/oddebug"
 	"github.com/urfave/cli"
+	"github.com/vgtmnm/nagioscfg"
 	"os"
 	"strings"
 	"time"
@@ -94,7 +95,7 @@ func entryPoint(ctx *cli.Context) error {
 	sort := !ctx.Bool("no-sort")
 	format := ctx.Bool("format-only")
 	args := ctx.Args() // files
-	eq := "="
+	const eq string = "="
 
 	log.Debugf("Types: %#v", types)
 	log.Debugf("Keys: %#v", keys)
@@ -146,7 +147,8 @@ func entryPoint(ctx *cli.Context) error {
 			}
 		}
 	}
-	ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
+	matches := ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
+	log.Debugf("Matches: %q (in: %s)", matches, oddebug.DebugInfoMedium(""))
 
 	// this seems like a good place for inverting matches if requested...
 
@@ -180,7 +182,7 @@ func entryPoint(ctx *cli.Context) error {
 		if ncfg.InPipe() {
 			ncfg.Print(os.Stdout, sort)
 		}
-	} else {
+	} else { // need more cases than this
 		ncfg.PrintMatches(os.Stdout, sort)
 	}
 
@@ -188,9 +190,9 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Content from: %s", src)
 	log.Debugf("Objects in DB: %d", ncfg.Len())
 	log.Debugf("Matching objects: %d", ncfg.GetMatches().Len())
+	log.Debugf("Objects deleted: %d", len(removed_objs))
 	log.Debugf("Keys deleted: %d", keys_deleted)
 	log.Debugf("Keys modified: %d", keys_modified)
-	log.Debugf("Objects deleted: %d", len(removed_objs))
 
 	return nil
 }
