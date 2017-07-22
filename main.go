@@ -94,6 +94,7 @@ func entryPoint(ctx *cli.Context) error {
 	save := ctx.Bool("save")
 	sort := !ctx.Bool("no-sort")
 	format := ctx.Bool("format-only")
+	invmatch := ctx.Bool("not")
 	args := ctx.Args() // files
 	const eq string = "="
 
@@ -101,6 +102,7 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Keys: %#v", keys)
 	log.Debugf("Exprs: %#v", exprs)
 	log.Debugf("Args: %#v", args)
+	log.Debugf("Negate: %b", invmatch)
 
 	// take the easy way out
 	if format {
@@ -151,6 +153,9 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Matches: %q (in: %s)", matches, oddebug.DebugInfoMedium(""))
 
 	// this seems like a good place for inverting matches if requested...
+	//if invmatch {
+	//	inv := ncfg.InverseResults()
+	//}
 
 	// if delete-key
 	if len(delkey) > 0 {
@@ -271,14 +276,14 @@ func main() {
 			Name:  "save",
 			Usage: "Save modified config back to given source files. Will not happen if input on STDIN.",
 		},
-		cli.BoolFlag{
-			Name:  "quiet",
-			Usage: "Don't output anything.",
-		},
-		cli.BoolFlag{
-			Name:  "verbose",
-			Usage: "Print extra info.",
-		},
+		//cli.BoolFlag{
+		//	Name:  "quiet",
+		//	Usage: "Don't output anything.",
+		//},
+		//cli.BoolFlag{
+		//	Name:  "verbose",
+		//	Usage: "Print extra info.",
+		//},
 		cli.StringFlag{
 			Name:  "log-level, l",
 			Value: "error",
