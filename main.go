@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-const VERSION string = "2017-07-21"
+const VERSION string = "2017-07-24"
 
 var BUILD_DATE string
 
@@ -93,7 +93,7 @@ func formatPipe(sort bool) error {
 	ncfg := nagioscfg.NewNagiosCfg()
 	err := ncfg.LoadStdin()
 	if err != nil {
-		return cli.NewExitError("Unable to load STDIN", 74) // EX_IOERR=74 # input/output error (from sysexits.h)
+		return cli.NewExitError(err.Error(), 74) // EX_IOERR=74 # input/output error (from sysexits.h)
 	}
 	ncfg.Print(os.Stdout, sort)
 	return nil
@@ -285,7 +285,7 @@ func main() {
 		},
 		cli.BoolFlag{
 			Name:  "no-sort",
-			Usage: "Do not sort output according to Nagios specs.",
+			Usage: "Do not sort object keys according to Nagios specs.",
 		},
 		cli.BoolFlag{
 			Name:  "save",
