@@ -1,7 +1,7 @@
 SOURCEDIR=.
 SOURCES := $(shell find $(SOURCEDIR) -name '*.go')
-BINARY=nagrep
-VERSION=0.0.1
+BINARY=nagrep.bin
+VERSION=0.0.2
 BUILD_TIME=`date +%FT%T%:z`
 LDFLAGS=-ldflags "-X main.BUILD_DATE=${BUILD_TIME} -d"
 
