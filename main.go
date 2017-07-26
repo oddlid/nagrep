@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 	"github.com/oddlid/oddebug"
 	"github.com/urfave/cli"
@@ -28,7 +29,20 @@ import (
 
 const VERSION string = "2017-07-24"
 
-var BUILD_DATE string
+var (
+	BUILD_DATE string
+	DBG_NOOP   bool
+)
+
+func dbgStr() string {
+	if DBG_NOOP {
+		return ""
+	}
+	callchain_lvl := 2
+	basename := true
+	funcname, filename, line := oddebug.DebugForWraps(DBG_NOOP, callchain_lvl, "", basename)
+	return fmt.Sprintf("(in: %s[%s:%d])", funcname, filename, line)
+}
 
 func verifyObjTypes(names []string) []nagioscfg.CfgType {
 	nlen := len(names)
@@ -89,11 +103,14 @@ func splitKV(in, sep string) (string, string, bool) {
 }
 
 // Same functionality as "nafmt", because I have time right now...
-func formatPipe(sort bool) error {
+func formatPipe(sort, removedups bool) error {
 	ncfg := nagioscfg.NewNagiosCfg()
 	err := ncfg.LoadStdin()
 	if err != nil {
 		return cli.NewExitError(err.Error(), 74) // EX_IOERR=74 # input/output error (from sysexits.h)
+	}
+	if removedups {
+		ncfg.RemoveServiceDuplicates(nil)
 	}
 	ncfg.Print(os.Stdout, sort)
 	return nil
@@ -109,6 +126,7 @@ func entryPoint(ctx *cli.Context) error {
 	save := ctx.Bool("save")
 	sort := !ctx.Bool("no-sort")
 	format := ctx.Bool("format-only")
+	deldups := ctx.Bool("remove-duplicates")
 	invmatch := ctx.Bool("not")
 	args := ctx.Args() // files
 	const eq string = "="
@@ -117,11 +135,11 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Keys: %#v", keys)
 	log.Debugf("Exprs: %#v", exprs)
 	log.Debugf("Args: %#v", args)
-	log.Debugf("Negate: %b", invmatch)
+	log.Debugf("Negate: %v", invmatch)
 
 	// take the easy way out
 	if format {
-		return formatPipe(sort)
+		return formatPipe(sort, deldups)
 	}
 
 	ncfg := nagioscfg.NewNagiosCfg()
@@ -136,6 +154,9 @@ func entryPoint(ctx *cli.Context) error {
 		ncfg.LoadFiles(args...)
 		src = "files"
 	}
+
+	// should remove dups here if requested, before anything else is done, 
+	// so we don't include the dups in matches and edits
 
 	tlen := len(types)
 	klen := len(keys)
@@ -165,7 +186,7 @@ func entryPoint(ctx *cli.Context) error {
 		}
 	}
 	matches := ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
-	log.Debugf("Matches: %q (in: %s)", matches, oddebug.DebugInfoMedium(""))
+	log.Debugf("Matches: %q %s", matches, dbgStr())
 
 	// this seems like a good place for inverting matches if requested...
 	if invmatch {
@@ -195,6 +216,14 @@ func entryPoint(ctx *cli.Context) error {
 	}
 
 	if save && !isPipe() {
+		//if deldups {
+		//	log.Debug("Removing duplicates...")
+		//} else {
+		//	hasdups, _ := ncfg.HasServiceDuplicates()
+		//	if hasdups {
+		//		log.Fatalf("Duplicates in config! Refusing to save! %s", dbgStr())
+		//	}
+		//}
 		err := ncfg.SaveToOrigin(sort)
 		if err != nil {
 			log.Error(err)
@@ -310,6 +339,10 @@ func main() {
 			Usage: "Deletes all matching objects.\n\tIf input was read from files, the files will be overwritten (if \"--save\" is set),\n\t\tand the deleted objects printed on STDOUT.\n\tIf input was read from STDIN, the remaining objects will be printed on STDOUT.",
 		},
 		cli.BoolFlag{
+			Name:  "remove-duplicates, r",
+			Usage: "Remove duplicate service object definitions, if found",
+		},
+		cli.BoolFlag{
 			Name:  "no-sort",
 			Usage: "Do not sort object keys according to Nagios specs.",
 		},
@@ -327,7 +360,7 @@ func main() {
 		//},
 		cli.StringFlag{
 			Name:  "log-level, l",
-			Value: "error",
+			Value: "info",
 			Usage: "Log level (options: debug, info, warn, error, fatal, panic).",
 		},
 		cli.BoolFlag{
@@ -350,6 +383,11 @@ func main() {
 			FullTimestamp:    true,
 		})
 		//log.SetOutput(os.Stderr)
+
+		// (possibly) speed up oddebug
+		if log.StandardLogger().Level != log.DebugLevel {
+			DBG_NOOP = true
+		}
 
 		return nil
 	}
