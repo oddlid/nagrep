@@ -310,13 +310,13 @@ func entryPoint(ctx *cli.Context) error {
 	}
 
 	//log.Debugf("Content (from %s):\n%s", src, ncfg.DumpString())
-	log.Debugf("Content from: %s", src)
-	log.Debugf("Objects in DB: %d", ncfg.Len())
-	log.Debugf("Matching objects: %d", ncfg.GetMatches().Len())
-	log.Debugf("Objects deleted: %d", len(removed_objs))
-	log.Debugf("Keys deleted: %d", keys_deleted)
-	log.Debugf("Keys modified: %d", keys_modified)
-	log.Debugf("Time used: %f", time.Duration(time.Now().Sub(t_start)).Seconds())
+	log.Infof("Content from     : %d %s", len(args), src)
+	log.Infof("Objects in DB    : %d", ncfg.Len())
+	log.Infof("Matching objects : %d", ncfg.GetMatches().Len())
+	log.Infof("Keys deleted     : %d", keys_deleted)
+	log.Infof("Keys modified    : %d", keys_modified)
+	log.Infof("Objects deleted  : %d", len(removed_objs))
+	log.Infof("Time used        : %f", time.Duration(time.Now().Sub(t_start)).Seconds())
 
 	return nil
 }
