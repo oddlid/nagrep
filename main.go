@@ -198,7 +198,7 @@ func entryPoint(ctx *cli.Context) error {
 		src = "files"
 	}
 
-	// should remove dups here if requested, before anything else is done, 
+	// should remove dups here if requested, before anything else is done,
 	// so we don't include the dups in matches and edits
 
 	tlen := len(types)
@@ -228,7 +228,10 @@ func entryPoint(ctx *cli.Context) error {
 			}
 		}
 	}
+	t_start := time.Now()
 	matches := ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
+	log.Debugf("Searched %d objects from %d files in %f seconds",
+		ncfg.Len(), len(args), time.Duration(time.Now().Sub(t_start)).Seconds())
 	log.Debugf("Matches: %q %s", matches, dbgStr())
 	//log.Debugf("Matched in files: \n%s\n", strings.Join(ncfg.UniqueFileIDs(matches), "\n"))
 
@@ -313,6 +316,7 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Objects deleted: %d", len(removed_objs))
 	log.Debugf("Keys deleted: %d", keys_deleted)
 	log.Debugf("Keys modified: %d", keys_modified)
+	log.Debugf("Time used: %f", time.Duration(time.Now().Sub(t_start)).Seconds())
 
 	return nil
 }
