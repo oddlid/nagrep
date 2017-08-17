@@ -27,7 +27,13 @@ import (
 	"time"
 )
 
-const VERSION string = "2017-07-24"
+const VERSION string = "2017-08-18"
+
+const (
+	// same as in sysexits.h from Linux
+	EX_USAGE int = 64
+	EX_IOERR int = 74
+)
 
 var (
 	BUILD_DATE string
@@ -107,12 +113,44 @@ func formatPipe(sort, removedups bool) error {
 	ncfg := nagioscfg.NewNagiosCfg()
 	err := ncfg.LoadStdin()
 	if err != nil {
-		return cli.NewExitError(err.Error(), 74) // EX_IOERR=74 # input/output error (from sysexits.h)
+		return cli.NewExitError(err.Error(), EX_IOERR)
 	}
 	if removedups {
 		ncfg.RemoveServiceDuplicates(nil)
 	}
 	ncfg.Print(os.Stdout, sort)
+	return nil
+}
+
+// createStub creates a new Nagios object and prints it out.
+func createStub(ctx *cli.Context) error {
+	types := verifyObjTypes(ctx.StringSlice("type")) // we'll only care about first type given
+	if len(types) == 0 {
+		return cli.NewExitError("You need to specify a type when creating a stub", EX_USAGE)
+	}
+	props := ctx.StringSlice("append-key")
+	plen := len(props)
+	const eq string = "="
+
+	if plen == 0 {
+		return cli.NewExitError("You need to specify at least one key=value (-a)", EX_USAGE)
+	}
+
+	o := nagioscfg.NewCfgObjWithUUID(types[0])
+
+	ak := make([]string, 0, plen)
+	av := make([]string, 0, plen)
+	for i := range props {
+		k, v, ok := splitKV(props[i], eq)
+		if ok {
+			ak = append(ak, k)
+			av = append(av, v)
+		}
+	}
+	o.SetKeys(ak, av)
+
+	o.Print(os.Stdout, true)
+
 	return nil
 }
 
@@ -128,6 +166,8 @@ func entryPoint(ctx *cli.Context) error {
 	format := ctx.Bool("format-only")
 	deldups := ctx.Bool("remove-duplicates")
 	invmatch := ctx.Bool("not")
+	stub := ctx.Bool("stub")
+	listfiles := ctx.Bool("list-files-only")
 	args := ctx.Args() // files
 	const eq string = "="
 
@@ -138,6 +178,9 @@ func entryPoint(ctx *cli.Context) error {
 	log.Debugf("Negate: %v", invmatch)
 
 	// take the easy way out
+	if stub {
+		return createStub(ctx)
+	}
 	if format {
 		return formatPipe(sort, deldups)
 	}
@@ -187,10 +230,24 @@ func entryPoint(ctx *cli.Context) error {
 	}
 	matches := ncfg.Search(q) // now searches either whole content or subset depending on if FilterType was called
 	log.Debugf("Matches: %q %s", matches, dbgStr())
+	//log.Debugf("Matched in files: \n%s\n", strings.Join(ncfg.UniqueFileIDs(matches), "\n"))
 
 	// this seems like a good place for inverting matches if requested...
 	if invmatch {
-		ncfg.InverseResults()
+		matches = ncfg.InverseResults()
+	}
+
+	// if requested to list-files-only, do so and exit before any modification is done
+	if listfiles {
+		// Only be verbose at level Info or Debug,
+		// Else only print matching filesnames, in case output should be used as input in a new instance or something
+		if log.StandardLogger().Level >= log.InfoLevel {
+			fmt.Printf("\n# Searched files:\n\n%s\n", strings.Join(args, "\n"))
+			fmt.Printf("\n# Found matches in the following files:\n\n%s\n\n", strings.Join(ncfg.UniqueFileIDs(matches), "\n"))
+		} else {
+			fmt.Printf("%s\n", strings.Join(ncfg.UniqueFileIDs(matches), "\n"))
+		}
+		return nil
 	}
 
 	// if delete-key
@@ -224,7 +281,7 @@ func entryPoint(ctx *cli.Context) error {
 		//		log.Fatalf("Duplicates in config! Refusing to save! %s", dbgStr())
 		//	}
 		//}
-		err := ncfg.SaveToOrigin(sort)
+		err := ncfg.SaveToOrigin(sort) // should really find a way to only save what's modified, and not every file
 		if err != nil {
 			log.Error(err)
 		}
@@ -319,8 +376,16 @@ func main() {
 			Usage: "Only read input from stdin, and output formatted to stdout. No matching.",
 		},
 		cli.BoolFlag{
+			Name:  "list-files-only",
+			Usage: "Only list the files that contain matching objects. Modification parameters will be ignored.",
+		},
+		cli.BoolFlag{
 			Name:  "not",
 			Usage: "Negate/inverse search to only list objects NOT matching given expressions.\n\tThe evaluation is done after all other keys/expressions are matched.",
+		},
+		cli.BoolFlag{
+			Name:  "stub",
+			Usage: "Create new Nagios object, populate and print out",
 		},
 		cli.StringSliceFlag{
 			Name:  "append-key, a",
@@ -360,7 +425,7 @@ func main() {
 		//},
 		cli.StringFlag{
 			Name:  "log-level, l",
-			Value: "info",
+			Value: "warn",
 			Usage: "Log level (options: debug, info, warn, error, fatal, panic).",
 		},
 		cli.BoolFlag{
